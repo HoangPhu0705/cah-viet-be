@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Player {
+  id           String       @id @default(uuid())
+  nickname     String
+  email        String?      @unique
+  passwordHash String?
+  avatarId     String
+  isGuest      Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  gamePlayers  GamePlayer[]
+  friends      Friendship[] @relation("PlayerFriends")
+  friendOf     Friendship[] @relation("FriendOf")
+}
+
+model Room {
+  id        String     @id @default(uuid())
+  code      String     @unique
+  status    RoomStatus @default(WAITING)
+  hostId    String
+  settings  Json
+  createdAt DateTime   @default(now())
+  games     Game[]
+}
+
+model Game {
+  id        String       @id @default(uuid())
+  roomId    String
+  room      Room         @relation(fields: [roomId], references: [id])
+  round     Int          @default(1)
+  status    GameStatus   @default(IN_PROGRESS)
+  createdAt DateTime     @default(now())
+  players   GamePlayer[]
+}
+
+model GamePlayer {
+  id       String @id @default(uuid())
+  gameId   String
+  playerId String
+  score    Int    @default(0)
+  game     Game   @relation(fields: [gameId], references: [id])
+  player   Player @relation(fields: [playerId], references: [id])
+}
+
+model Deck {
+  id         String      @id @default(uuid())
+  name       String
+  isOfficial Boolean     @default(false)
+  blackCards BlackCard[]
+  whiteCards WhiteCard[]
+}
+
+model BlackCard {
+  id        String @id @default(uuid())
+  text      String
+  pickCount Int    @default(1)
+  deckId    String
+  deck      Deck   @relation(fields: [deckId], references: [id])
+}
+
+model WhiteCard {
+  id     String @id @default(uuid())
+  text   String
+  deckId String
+  deck   Deck   @relation(fields: [deckId], references: [id])
+}
+
+model Friendship {
+  id        String   @id @default(uuid())
+  playerId  String
+  friendId  String
+  createdAt DateTime @default(now())
+  player    Player   @relation("PlayerFriends", fields: [playerId], references: [id])
+  friend    Player   @relation("FriendOf", fields: [friendId], references: [id])
+
+  @@unique([playerId, friendId])
+}
+
+enum RoomStatus {
+  WAITING
+  IN_PROGRESS
+  FINISHED
+}
+
+enum GameStatus {
+  IN_PROGRESS
+  FINISHED
+}
