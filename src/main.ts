@@ -1,26 +1,27 @@
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { setupSwagger, SWAGGER_PATH } from './config/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  const config = new DocumentBuilder()
-    .setTitle('CAH VietVerse API')
-    .setDescription('Cards Against Humanity backend')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
+  const isDev = process.env.NODE_ENV === 'development';
 
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  if (isDev || process.env.SWAGGER_ENABLED === 'true') {
+    setupSwagger(app);
+  }
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
 
-  if (process.env.NODE_ENV !== 'production') {
-    const { default: open } = await import('open');
-    await open(`http://localhost:${port}/api`);
+  // Only open browser in interactive local dev
+  if (isDev && !process.env.CI && process.stdout.isTTY) {
+    try {
+      const { default: open } = await import('open');
+      await open(`http://localhost:${port}/${SWAGGER_PATH}`);
+    } catch {
+      // silently skip if browser open fails
+    }
   }
 }
 
