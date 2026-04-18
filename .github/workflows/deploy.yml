@@ -6,8 +6,8 @@ on:
       - main
 
 env:
-  AWS_REGION: ap-southeast-1          # change to your region
-  ECR_REPOSITORY: cah-backend         # your ECR repo name
+  AWS_REGION: ap-southeast-1 # change to your region
+  ECR_REPOSITORY: cah-backend # your ECR repo name
 
 jobs:
   deploy:
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: yarn
 
       - name: Install dependencies
