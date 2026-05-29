@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import helmet from 'helmet';
-import { LoggingInterceptor } from '../presentation/interceptors/logging.interceptor';
+import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
+import { AppExceptionFilter } from '../common/filters/app-exception.filter';
 import { setupSwagger } from './swagger';
 
 export function setupApp(app: INestApplication): void {
@@ -16,6 +17,7 @@ export function setupApp(app: INestApplication): void {
     }),
   );
 
+  app.useGlobalFilters(new AppExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
   const isDev = process.env.NODE_ENV === 'development';

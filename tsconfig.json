@@ -20,6 +20,8 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "types": ["jest", "node"]
-  }
+    "types": ["jest", "node"],
+    "allowJs": true
+  },
+  "include": ["src", "test", "prisma.config.cjs", "prisma.config.ts"]
 }
