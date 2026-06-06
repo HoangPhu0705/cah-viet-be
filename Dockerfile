@@ -17,8 +17,7 @@ RUN yarn build
 # ── Stage 2: production ──────────────────────────────────────────────────────
 FROM node:22-alpine AS production
 
-WORKDIR /app
-
+    
 ENV NODE_ENV=production
 
 # Install only production deps
@@ -35,4 +34,4 @@ COPY prisma.config.cjs ./
 
 EXPOSE 3001
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]
