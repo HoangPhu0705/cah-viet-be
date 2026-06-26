@@ -34,7 +34,7 @@ export class WsJwtGuard implements CanActivate {
       if (!exists) throw new UnauthorizedException('Guest session expired');
     }
 
-    client.data.user = payload;
+    (client.data as { user: JwtPayload }).user = payload;
     return true;
   }
 }
