@@ -15,17 +15,19 @@ import { LoginDto } from '../../presentation/dto/login.dto';
 import { AuthResponseDto } from '../../presentation/dto/auth-response.dto';
 import { JwtPayload } from '../../../../shared/types';
 import { parseTtlToSeconds } from '../../../../common/utils/time.utils';
+import { IAuthService } from './auth.service.interface';
 
 @Injectable()
-export class AuthService {
+export class AuthService extends IAuthService {
   constructor(
     private readonly playerRepo: IPlayerRepository,
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly mapper: AuthMapper,
-  ) {}
-
+  ) {
+    super();
+  }
   async guestLogin(dto: GuestLoginDto): Promise<AuthResponseDto> {
     const player = await this.playerRepo.create({
       nickname: dto.nickname,
