@@ -17,20 +17,19 @@ RUN yarn build
 # ── Stage 2: production ──────────────────────────────────────────────────────
 FROM node:22-alpine AS production
 
-WORKDIR /app
-
+    
 ENV NODE_ENV=production
 
 # Install only production deps
 COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile --production && yarn cache clean
 
-# Copy compiled output + generated Prisma client from builder
+# Copy compiled output and generated Prisma client from builder
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/generated ./generated
 COPY prisma ./prisma
+COPY prisma.config.cjs ./
 
 EXPOSE 3001
 
-CMD ["node", "dist/main"]
+CMD ["node", "dist/src/main"]

@@ -90,56 +90,110 @@ Two separate repos:
 
 ## Backend module structure
 
+Vertical slice architecture: each feature module owns its full stack (domain → application → infrastructure → presentation). Global infrastructure (Prisma, Redis) lives at the top level.
+
 ```
 src/
 ├── main.ts
 ├── app.module.ts
-├── config/
-│   └── configuration.ts
-├── types/
-│   └── index.ts
-├── modules/
-│   ├── auth/
-│   │   ├── auth.module.ts
-│   │   ├── auth.service.ts
-│   │   ├── auth.controller.ts
-│   │   ├── jwt.strategy.ts
-│   │   ├── jwt-auth.guard.ts
-│   │   └── ws-jwt.guard.ts
-│   ├── rooms/
-│   │   ├── rooms.module.ts
-│   │   ├── rooms.service.ts
-│   │   └── rooms.controller.ts
-│   ├── game/
-│   │   ├── game.module.ts
-│   │   ├── game.service.ts
-│   │   ├── game.controller.ts
-│   │   └── game.gateway.ts
-│   ├── players/
-│   │   ├── players.module.ts
-│   │   ├── players.service.ts
-│   │   └── players.controller.ts
-│   └── decks/
-│       ├── decks.module.ts
-│       ├── decks.service.ts
-│       └── decks.controller.ts
-├── redis/
-│   ├── redis.module.ts        ← @Global()
-│   └── redis.service.ts
-├── prisma/
-│   ├── prisma.module.ts       ← @Global()
-│   └── prisma.service.ts
-├── workers/
+│
+├── common/                          # cross-cutting NestJS concerns
+│   ├── decorators/
+│   │   └── current-user.decorator.ts
+│   ├── exceptions/
+│   │   └── app.exception.ts         # base AppException class
+│   ├── filters/
+│   │   ├── app-exception.filter.ts
+│   │   └── ws-exception.filter.ts
+│   ├── guards/
+│   │   └── jwt-auth.guard.ts        # generic AuthGuard('jwt') wrapper
+│   ├── interceptors/
+│   │   └── logging.interceptor.ts
+│   └── utils/
+│       └── time.utils.ts            # parseTtlToSeconds
+│
+├── config/                          # env config, app setup, swagger
+│   ├── app.setup.ts
+│   ├── configuration.ts
+│   └── swagger.ts
+│
+├── infrastructure/                  # global shared adapters (@Global)
+│   ├── prisma/
+│   │   ├── prisma.module.ts
+│   │   └── prisma.service.ts
+│   └── redis/
+│       ├── redis.module.ts
+│       └── redis.service.ts
+│
+├── shared/
+│   └── types/
+│       └── auth.types.ts            # JwtPayload (used cross-module)
+│
+├── workers/                         # BullMQ processors (future — cross-feature)
 │   ├── round.processor.ts
 │   └── cleanup.processor.ts
-└── common/
-    ├── decorators/
-    │   └── current-user.decorator.ts
-    ├── filters/
-    │   └── ws-exception.filter.ts
-    └── interceptors/
-        └── logging.interceptor.ts
+│
+└── modules/
+    ├── auth/
+    │   ├── application/
+    │   │   └── use-cases/
+    │   │       ├── auth.use-case.interface.ts
+    │   │       └── auth.use-case.ts
+    │   ├── domain/
+    │   │   ├── entities/
+    │   │   │   └── player.entity.ts
+    │   │   ├── exceptions/
+    │   │   │   └── auth.exceptions.ts
+    │   │   └── repositories/
+    │   │       └── player.repository.interface.ts  # + CreatePlayerData
+    │   ├── infrastructure/
+    │   │   └── repositories/
+    │   │       └── prisma-player.repository.ts
+    │   ├── presentation/
+    │   │   ├── controllers/
+    │   │   │   └── auth.controller.ts
+    │   │   ├── dto/
+    │   │   │   ├── auth-response.dto.ts
+    │   │   │   ├── guest-login.dto.ts
+    │   │   │   ├── login.dto.ts
+    │   │   │   └── register.dto.ts
+    │   │   ├── guards/
+    │   │   │   ├── jwt.strategy.ts   # Passport JWT strategy
+    │   │   │   └── ws-jwt.guard.ts   # WebSocket auth guard
+    │   │   └── mappers/
+    │   │       └── auth.mapper.ts    # Player → PlayerResponseDto
+    │   └── auth.module.ts
+    │
+    ├── room/
+    │   ├── domain/
+    │   │   ├── entities/
+    │   │   │   └── room.entity.ts
+    │   │   └── repositories/
+    │   │       └── room.repository.interface.ts    # + CreateRoomData
+    │   ├── infrastructure/
+    │   │   └── repositories/
+    │   │       └── prisma-room.repository.ts
+    │   ├── presentation/
+    │   │   ├── controllers/
+    │   │   │   └── rooms.controller.ts
+    │   │   └── gateways/            # Socket.IO — add when implementing
+    │   └── room.module.ts
+    │
+    └── game/
+        ├── domain/
+        │   └── entities/
+        │       └── game.entity.ts
+        ├── presentation/
+        │   └── gateways/            # main game gateway — add when implementing
+        └── game.module.ts
 ```
+
+### Architecture rules
+- Repository interfaces (`IPlayerRepository`, `IRoomRepository`) live in each module's `domain/repositories/` — they are the domain's data contract
+- Repository implementations (`Prisma*Repository`) live in each module's `infrastructure/repositories/`
+- Passport `JwtStrategy` and `WsJwtGuard` live in `modules/auth/presentation/guards/` because they depend on `JwtService` registered in `AuthModule`
+- `JwtAuthGuard` lives in `common/guards/` — it's a thin wrapper with no injected dependencies
+- BullMQ workers go in top-level `workers/` because they are orchestration-level jobs that span multiple modules
 
 ---
 
@@ -221,7 +275,9 @@ FE_URL=http://localhost:3000
 ## Where we left off
 
 - Docker + docker-compose set up locally (Postgres + Redis)
-- NestJS project scaffolded with all modules generated
-- `PrismaService`, `RedisService`, `AppModule`, `main.ts` written
 - Prisma schema defined, first migration run (`npx prisma migrate dev --name init`)
-- **Next step: AuthModule** — guest + registered login, JWT strategy, guards
+- Refactored to vertical slice architecture (feature modules with domain/application/infrastructure/presentation layers)
+- `AuthModule` complete — guest login, register, login, JWT strategy, WsJwtGuard, repository pattern wired
+- `RoomModule` scaffold in place — entity, repo interface, Prisma impl, empty controller
+- `GameModule` placeholder created
+- **Next step:** Implement room creation flow — `RoomModule` application layer + `POST /rooms` endpoint

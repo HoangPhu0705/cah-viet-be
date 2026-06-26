@@ -1,15 +1,12 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["app"]
 }
 
 model Player {
@@ -23,6 +20,8 @@ model Player {
   gamePlayers  GamePlayer[]
   friends      Friendship[] @relation("PlayerFriends")
   friendOf     Friendship[] @relation("FriendOf")
+
+  @@schema("app")
 }
 
 model Room {
@@ -33,6 +32,8 @@ model Room {
   settings  Json
   createdAt DateTime   @default(now())
   games     Game[]
+
+  @@schema("app")
 }
 
 model Game {
@@ -43,6 +44,8 @@ model Game {
   status    GameStatus   @default(IN_PROGRESS)
   createdAt DateTime     @default(now())
   players   GamePlayer[]
+
+  @@schema("app")
 }
 
 model GamePlayer {
@@ -52,6 +55,8 @@ model GamePlayer {
   score    Int    @default(0)
   game     Game   @relation(fields: [gameId], references: [id])
   player   Player @relation(fields: [playerId], references: [id])
+
+  @@schema("app")
 }
 
 model Deck {
@@ -60,6 +65,8 @@ model Deck {
   isOfficial Boolean     @default(false)
   blackCards BlackCard[]
   whiteCards WhiteCard[]
+
+  @@schema("app")
 }
 
 model BlackCard {
@@ -68,6 +75,8 @@ model BlackCard {
   pickCount Int    @default(1)
   deckId    String
   deck      Deck   @relation(fields: [deckId], references: [id])
+
+  @@schema("app")
 }
 
 model WhiteCard {
@@ -75,6 +84,8 @@ model WhiteCard {
   text   String
   deckId String
   deck   Deck   @relation(fields: [deckId], references: [id])
+
+  @@schema("app")
 }
 
 model Friendship {
@@ -86,15 +97,20 @@ model Friendship {
   friend    Player   @relation("FriendOf", fields: [friendId], references: [id])
 
   @@unique([playerId, friendId])
+  @@schema("app")
 }
 
 enum RoomStatus {
   WAITING
   IN_PROGRESS
   FINISHED
+
+  @@schema("app")
 }
 
 enum GameStatus {
   IN_PROGRESS
   FINISHED
+
+  @@schema("app")
 }

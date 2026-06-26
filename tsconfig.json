@@ -17,9 +17,11 @@
     "skipLibCheck": true,
     "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
+    "noImplicitAny": true,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
-    "types": ["jest", "node"]
-  }
+    "types": ["jest", "node"],
+    "allowJs": true
+  },
+  "include": ["src", "test", "prisma.config.cjs", "prisma.config.ts"]
 }
