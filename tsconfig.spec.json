@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // ts-jest compiles file-by-file; without an explicit rootDir TS6 infers it from
+    // the spec's own directory and errors (TS5011). Kept out of tsconfig.json so the
+    // `nest build` output layout (dist/main.js) stays unchanged.
+    "rootDir": ".",
+    "sourceMap": false,
+    "declaration": false,
+    "incremental": false
+  }
+}

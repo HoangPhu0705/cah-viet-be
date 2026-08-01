@@ -113,8 +113,13 @@ src/
 │       └── time.utils.ts            # parseTtlToSeconds
 │
 ├── config/                          # env config, app setup, swagger
+│   ├── index.ts                     # configNamespaces + Inject*Config() decorators
+│   ├── namespaces/                  # one registerAs() namespace per concern
+│   │   ├── app.config.ts
+│   │   ├── database.config.ts
+│   │   ├── jwt.config.ts
+│   │   └── redis.config.ts
 │   ├── app.setup.ts
-│   ├── configuration.ts
 │   └── swagger.ts
 │
 ├── infrastructure/                  # global shared adapters (@Global)
@@ -127,7 +132,7 @@ src/
 │
 ├── shared/
 │   └── types/
-│       └── auth.types.ts            # JwtPayload (used cross-module)
+│       └── auth.types.ts            # AuthTokenPayload / AuthTokenType / IssuedToken (cross-module)
 │
 ├── workers/                         # BullMQ processors (future — cross-feature)
 │   ├── round.processor.ts
@@ -136,9 +141,11 @@ src/
 └── modules/
     ├── auth/
     │   ├── application/
-    │   │   └── use-cases/
-    │   │       ├── auth.use-case.interface.ts
-    │   │       └── auth.use-case.ts
+    │   │   └── services/
+    │   │       ├── auth.service.interface.ts
+    │   │       ├── auth.service.ts
+    │   │       ├── guest-session.store.interface.ts  # IGuestSessionStore
+    │   │       └── token.service.interface.ts        # ITokenService (app token contract)
     │   ├── domain/
     │   │   ├── entities/
     │   │   │   └── player.entity.ts
@@ -147,8 +154,11 @@ src/
     │   │   └── repositories/
     │   │       └── player.repository.interface.ts  # + CreatePlayerData
     │   ├── infrastructure/
-    │   │   └── repositories/
-    │   │       └── prisma-player.repository.ts
+    │   │   ├── repositories/
+    │   │   │   └── prisma-player.repository.ts
+    │   │   └── services/
+    │   │       ├── jwt-token.service.ts         # only file that imports @nestjs/jwt
+    │   │       └── redis-guest-session.store.ts # owns the guest:session:* keys
     │   ├── presentation/
     │   │   ├── controllers/
     │   │   │   └── auth.controller.ts
@@ -158,8 +168,8 @@ src/
     │   │   │   ├── login.dto.ts
     │   │   │   └── register.dto.ts
     │   │   ├── guards/
-    │   │   │   ├── jwt.strategy.ts   # Passport JWT strategy
-    │   │   │   └── ws-jwt.guard.ts   # WebSocket auth guard
+    │   │   │   ├── jwt.strategy.ts   # Passport JWT strategy (claims → ITokenService)
+    │   │   │   └── ws-jwt.guard.ts   # WebSocket auth guard (→ ITokenService.verify)
     │   │   └── mappers/
     │   │       └── auth.mapper.ts    # Player → PlayerResponseDto
     │   └── auth.module.ts
@@ -189,11 +199,31 @@ src/
 ```
 
 ### Architecture rules
+
 - Repository interfaces (`IPlayerRepository`, `IRoomRepository`) live in each module's `domain/repositories/` — they are the domain's data contract
 - Repository implementations (`Prisma*Repository`) live in each module's `infrastructure/repositories/`
-- Passport `JwtStrategy` and `WsJwtGuard` live in `modules/auth/presentation/guards/` because they depend on `JwtService` registered in `AuthModule`
+- Passport `JwtStrategy` and `WsJwtGuard` live in `modules/auth/presentation/guards/` — they are transport-specific adapters that delegate to `ITokenService`
 - `JwtAuthGuard` lives in `common/guards/` — it's a thin wrapper with no injected dependencies
 - BullMQ workers go in top-level `workers/` because they are orchestration-level jobs that span multiple modules
+
+### Tokens (`ITokenService`)
+
+- Nothing outside `jwt-token.service.ts` imports `@nestjs/jwt`. `AuthModule` provides `ITokenService` and does **not** export `JwtModule`, so swapping the signing library is a one-file change.
+- Every token carries app-scoped claims and verification requires all of them:
+  - `iss` = `JWT_ISSUER`, `aud` = `JWT_AUDIENCE` — a token signed with the same secret by anything else (other service, other environment) is rejected
+  - `tokenType` = `access` \| `guest` — a guest token can't be replayed as a registered one; `isGuest` must agree with it
+  - `sub` = player id, `nickname`, `exp` from the per-type TTL
+- `verify()` = signature + expiry + claims (used by the WS guard). `validateClaims()` = claims only, for passport-jwt which already did the crypto — one rule set for both transports.
+- Guest session lookups go through `IGuestSessionStore`; the `guest:session:*` key format lives only in `RedisGuestSessionStore`.
+- Token failures raise domain exceptions (`InvalidTokenException`, `GuestSessionExpiredException`); guards translate them per transport (`UnauthorizedException` for HTTP, `WsException` for sockets).
+
+### Config
+
+- One namespace file per concern in `config/namespaces/`, each a `registerAs()` returning a typed object; `configNamespaces` is what `AppModule` loads.
+- Consumers inject a typed slice — `constructor(@InjectJwtConfig() private readonly config: JwtConfig)` — instead of `configService.get('jwt.expiresIn')`. Renaming a key is a compile error, not a runtime `undefined`.
+- `process.env` is read **only** inside `config/namespaces/*` (plus `main.ts`'s `CI` check). Required vars (`JWT_SECRET`, `DATABASE_URL`) throw at boot.
+- TTLs are parsed to seconds once at config load (`accessTokenTtlSeconds`, `guestTokenTtlSeconds`) — callers never re-parse `"7d"`.
+- Config interfaces are imported with `import type` where used as constructor params — `isolatedModules` + `emitDecoratorMetadata` requires it (TS1272).
 
 ---
 
@@ -267,6 +297,8 @@ REDIS_PORT=6379
 JWT_SECRET=...
 JWT_EXPIRES_IN=7d
 GUEST_JWT_EXPIRES_IN=24h
+JWT_ISSUER=xamcard-be
+JWT_AUDIENCE=xamcard-web
 FE_URL=http://localhost:3000
 ```
 

@@ -6,11 +6,11 @@ import { RedisModule } from './infrastructure/redis/redis.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RoomModule } from './modules/room/room.module';
 import { GameModule } from './modules/game/game.module';
-import configuration from './config/configuration';
+import { configNamespaces } from './config';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ load: [configuration], isGlobal: true }),
+    ConfigModule.forRoot({ load: configNamespaces, isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 60 }]),
     PrismaModule,
     RedisModule,

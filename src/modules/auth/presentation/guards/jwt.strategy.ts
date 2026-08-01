@@ -1,28 +1,48 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { RedisService } from '../../../../infrastructure/redis/redis.service';
-import { JwtPayload } from '../../../../shared/types';
+import { InjectJwtConfig } from '../../../../config';
+import type { JwtConfig } from '../../../../config';
+import { AuthTokenPayload } from '../../../../shared/types';
+import { AppException } from '../../../../common/exceptions/app.exception';
+import { ITokenService } from '../../application/services/token.service.interface';
+import { IGuestSessionStore } from '../../application/services/guest-session.store.interface';
 
+/**
+ * passport-jwt does the signature/expiry/`iss`/`aud` checks from the same config the
+ * signer uses; `validate` then defers the app-specific claim rules to `ITokenService`
+ * so HTTP and WebSocket auth can't drift apart.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(private readonly redisService: RedisService) {
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error('JWT_SECRET is not set');
-
+  constructor(
+    @InjectJwtConfig() config: JwtConfig,
+    private readonly tokenService: ITokenService,
+    private readonly guestSessions: IGuestSessionStore,
+  ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: secret,
+      secretOrKey: config.secret,
+      issuer: config.issuer,
+      audience: config.audience,
+      algorithms: [config.algorithm],
     });
   }
 
-  async validate(payload: JwtPayload): Promise<JwtPayload> {
-    if (payload.isGuest) {
-      const exists = await this.redisService.exists(
-        `guest:session:${payload.sub}`,
+  async validate(rawPayload: unknown): Promise<AuthTokenPayload> {
+    let payload: AuthTokenPayload;
+    try {
+      payload = this.tokenService.validateClaims(rawPayload);
+    } catch (error) {
+      throw new UnauthorizedException(
+        error instanceof AppException ? error.message : 'Invalid token',
       );
-      if (!exists) throw new UnauthorizedException('Guest session expired');
     }
+
+    if (payload.isGuest && !(await this.guestSessions.isActive(payload.sub))) {
+      throw new UnauthorizedException('Guest session expired');
+    }
+
     return payload;
   }
 }

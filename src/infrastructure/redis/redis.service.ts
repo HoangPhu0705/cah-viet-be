@@ -5,16 +5,20 @@ import {
   Logger,
 } from '@nestjs/common';
 import Redis from 'ioredis';
+import { InjectRedisConfig } from '../../config';
+import type { RedisConfig } from '../../config';
 
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private client!: Redis;
 
+  constructor(@InjectRedisConfig() private readonly config: RedisConfig) {}
+
   onModuleInit() {
     this.client = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      host: this.config.host,
+      port: this.config.port,
       lazyConnect: true,
     });
 

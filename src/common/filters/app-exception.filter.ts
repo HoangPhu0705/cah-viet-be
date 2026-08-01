@@ -10,6 +10,8 @@ import { AppException } from '../exceptions/app.exception';
 const STATUS_MAP: Record<string, HttpStatus> = {
   EMAIL_ALREADY_IN_USE: HttpStatus.CONFLICT,
   INVALID_CREDENTIALS: HttpStatus.UNAUTHORIZED,
+  INVALID_TOKEN: HttpStatus.UNAUTHORIZED,
+  GUEST_SESSION_EXPIRED: HttpStatus.UNAUTHORIZED,
 };
 
 @Catch(AppException)

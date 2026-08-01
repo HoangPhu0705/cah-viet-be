@@ -19,7 +19,7 @@ import { LoginDto } from '../dto/login.dto';
 import { AuthResponseDto } from '../dto/auth-response.dto';
 import { JwtAuthGuard } from '../../../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../../common/decorators/current-user.decorator';
-import { JwtPayload } from '../../../../shared/types';
+import type { AuthTokenPayload } from '../../../../shared/types';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -52,7 +52,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get current player' })
-  me(@CurrentUser() user: JwtPayload): JwtPayload {
+  me(@CurrentUser() user: AuthTokenPayload): AuthTokenPayload {
     return user;
   }
 }

@@ -3,11 +3,15 @@ import helmet from 'helmet';
 import { LoggingInterceptor } from '../common/interceptors/logging.interceptor';
 import { AppExceptionFilter } from '../common/filters/app-exception.filter';
 import { setupSwagger } from './swagger';
+import appConfig from './namespaces/app.config';
+import type { AppConfig } from './namespaces/app.config';
 
 export function setupApp(app: INestApplication): void {
+  const config = app.get<AppConfig>(appConfig.KEY);
+
   app.use(helmet());
 
-  app.enableCors({ origin: process.env.FE_URL || 'http://localhost:3000' });
+  app.enableCors({ origin: config.feUrl });
 
   app.useGlobalPipes(
     new ValidationPipe({
@@ -20,8 +24,7 @@ export function setupApp(app: INestApplication): void {
   app.useGlobalFilters(new AppExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
-  const isDev = process.env.NODE_ENV === 'development';
-  if (isDev || process.env.SWAGGER_ENABLED === 'true') {
+  if (config.swaggerEnabled) {
     setupSwagger(app);
   }
 }

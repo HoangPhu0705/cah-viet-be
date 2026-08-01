@@ -11,3 +11,15 @@ export class InvalidCredentialsException extends AppException {
     super('Invalid credentials', 'INVALID_CREDENTIALS');
   }
 }
+
+export class InvalidTokenException extends AppException {
+  constructor(reason = 'Invalid token') {
+    super(reason, 'INVALID_TOKEN');
+  }
+}
+
+export class GuestSessionExpiredException extends AppException {
+  constructor() {
+    super('Guest session expired', 'GUEST_SESSION_EXPIRED');
+  }
+}

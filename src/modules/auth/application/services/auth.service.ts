@@ -1,33 +1,32 @@
 import { Injectable } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import {
   EmailAlreadyInUseException,
   InvalidCredentialsException,
 } from '../../domain/exceptions/auth.exceptions';
 import { IPlayerRepository } from '../../domain/repositories/player.repository.interface';
-import { RedisService } from '../../../../infrastructure/redis/redis.service';
 import { AuthMapper } from '../../presentation/mappers/auth.mapper';
 import { GuestLoginDto } from '../../presentation/dto/guest-login.dto';
 import { RegisterDto } from '../../presentation/dto/register.dto';
 import { LoginDto } from '../../presentation/dto/login.dto';
 import { AuthResponseDto } from '../../presentation/dto/auth-response.dto';
-import { JwtPayload } from '../../../../shared/types';
-import { parseTtlToSeconds } from '../../../../common/utils/time.utils';
 import { IAuthService } from './auth.service.interface';
+import { ITokenService } from './token.service.interface';
+import { IGuestSessionStore } from './guest-session.store.interface';
+
+const PASSWORD_SALT_ROUNDS = 10;
 
 @Injectable()
 export class AuthService extends IAuthService {
   constructor(
     private readonly playerRepo: IPlayerRepository,
-    private readonly jwtService: JwtService,
-    private readonly redisService: RedisService,
-    private readonly configService: ConfigService,
+    private readonly tokenService: ITokenService,
+    private readonly guestSessions: IGuestSessionStore,
     private readonly mapper: AuthMapper,
   ) {
     super();
   }
+
   async guestLogin(dto: GuestLoginDto): Promise<AuthResponseDto> {
     const player = await this.playerRepo.create({
       nickname: dto.nickname,
@@ -35,29 +34,20 @@ export class AuthService extends IAuthService {
       isGuest: true,
     });
 
-    const payload: JwtPayload = {
-      sub: player.id,
+    const { token, expiresInSeconds } = this.tokenService.issueGuestToken({
+      id: player.id,
       nickname: player.nickname,
-      isGuest: true,
-    };
-    const ttlSeconds = parseTtlToSeconds(
-      this.configService.get<string>('jwt.guestExpiresIn') ?? '24h',
-      86400,
-    );
-
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: ttlSeconds,
     });
-    await this.redisService.set(`guest:session:${player.id}`, '1', ttlSeconds);
+    await this.guestSessions.start(player.id, expiresInSeconds);
 
-    return this.buildResponse(accessToken, player);
+    return this.buildResponse(token, player);
   }
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
     const existing = await this.playerRepo.findByEmail(dto.email);
     if (existing) throw new EmailAlreadyInUseException();
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const passwordHash = await bcrypt.hash(dto.password, PASSWORD_SALT_ROUNDS);
     const player = await this.playerRepo.create({
       nickname: dto.nickname,
       avatarId: dto.avatarId,
@@ -66,13 +56,12 @@ export class AuthService extends IAuthService {
       passwordHash,
     });
 
-    const payload: JwtPayload = {
-      sub: player.id,
+    const { token } = this.tokenService.issueAccessToken({
+      id: player.id,
       nickname: player.nickname,
-      isGuest: false,
-    };
+    });
 
-    return this.buildResponse(this.signRegisteredToken(payload), player);
+    return this.buildResponse(token, player);
   }
 
   async login(dto: LoginDto): Promise<AuthResponseDto> {
@@ -82,21 +71,12 @@ export class AuthService extends IAuthService {
     const valid = await bcrypt.compare(dto.password, player.passwordHash);
     if (!valid) throw new InvalidCredentialsException();
 
-    const payload: JwtPayload = {
-      sub: player.id,
+    const { token } = this.tokenService.issueAccessToken({
+      id: player.id,
       nickname: player.nickname,
-      isGuest: false,
-    };
+    });
 
-    return this.buildResponse(this.signRegisteredToken(payload), player);
-  }
-
-  private signRegisteredToken(payload: JwtPayload): string {
-    const ttlSeconds = parseTtlToSeconds(
-      this.configService.get<string>('jwt.expiresIn') ?? '7d',
-      604800,
-    );
-    return this.jwtService.sign(payload, { expiresIn: ttlSeconds });
+    return this.buildResponse(token, player);
   }
 
   private buildResponse(
